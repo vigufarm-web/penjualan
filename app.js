@@ -21,6 +21,7 @@ function url(path) { return apiOrigin + '/api/input-client' + path; }
 async function api(path,method='GET',data) {
   const res=await fetch(url(path),{method,credentials:'omit',headers:{...(token?{Authorization:'Bearer '+token}:{}),...(data===undefined?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data)});
   const result=await res.json().catch(()=>null);
+  if(res.status===404)throw new Error('Aplikasi Penjualan masih disiapkan. Sambungan data belum aktif.');
   if(res.status===401 && path==='/me'){token='';return {user:null};}
   if(!res.ok || !result)throw new Error(result?.error || 'Layanan belum tersedia.');
   if(path==='/login')token=result.token;
