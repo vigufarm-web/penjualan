@@ -38,6 +38,16 @@ button:disabled { opacity: .55; cursor: default; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
 th, td { padding: .55rem; border-bottom: 1px solid #e0e8e0; }
 th { background: #eaf1e9; }
+/* Tabel transaksi dibuat lebih rapat tanpa mengecilkan formulir input. */
+#sales > .table-wrap table { font-size: .8rem; line-height: 1.35; }
+#sales > .table-wrap th, #sales > .table-wrap td { padding: .4rem .45rem; vertical-align: top; }
+#sales > .table-wrap th { font-size: .78rem; }
+#sales > .table-wrap td:first-child, #sales > .table-wrap td:nth-child(2) { white-space: nowrap; }
+#sales > .table-wrap th:nth-last-child(5) { font-size: 0; }
+#sales > .table-wrap th:nth-last-child(5)::after { content: 'Nominal (Rp)'; font-size: .78rem; }
+#sales > .table-wrap td:last-child { white-space: nowrap; }
+#sales > .table-wrap td:last-child button { font-size: .78rem; padding: .3rem .45rem; margin-right: .25rem; }
+body:has(#sales:not([hidden])) main { width: min(96rem, calc(100% - 2rem)); }
 dialog { width: min(30rem, calc(100% - 2rem)); }
 dialog::backdrop { background: #1b2d2266; }
 .error { color: #a12923; }
