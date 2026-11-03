@@ -19,7 +19,9 @@ const fields = {
 function message(element, text, error=false) { element.textContent=text; element.classList.toggle('error',error); }
 function url(path) { return apiOrigin + '/api/input-client' + path; }
 async function api(path,method='GET',data) {
-  const res=await fetch(url(path),{method,credentials:'omit',headers:{...(token?{Authorization:'Bearer '+token}:{}),...(data===undefined?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data)});
+  let res;
+  try{res=await fetch(url(path),{method,credentials:'omit',headers:{...(token?{Authorization:'Bearer '+token}:{}),...(data===undefined?{}:{'Content-Type':'application/json'})},body:data===undefined?undefined:JSON.stringify(data)});}
+  catch{throw new Error('Sambungan layanan Penjualan belum siap atau jaringan sedang bermasalah.');}
   const result=await res.json().catch(()=>null);
   if(res.status===404)throw new Error('Aplikasi Penjualan masih disiapkan. Sambungan data belum aktif.');
   if(res.status===401 && path==='/me'){token='';return {user:null};}
