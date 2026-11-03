@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Penjualan Kebun · VIGU</title>
   <link rel="stylesheet" href="./style.css?v=20261103-tabel">
-  <script type="module" src="./app.js?v=20261103-otomatis"></script>
+  <script type="module" src="./app.js?v=20261103-pilih-gudang"></script>
 </head>
 <body>
   <header><div><span class="brand">VIGU</span> PT Vigu Farm Indonesia</div><a href="https://laporankebun.vercel.app/">Dashboard Laporan Kebun ↗</a></header>
@@ -28,6 +28,8 @@
         <div id="summary-values" class="dashboard-grid"></div>
         <p>Pembayaran mengikuti surat jalan pada periode yang dipilih, bukan tanggal transfer. Piutang per pembeli mencakup seluruh data tercatat.</p>
         <details><summary>Pembeli dengan sisa tagihan</summary><div class="table-wrap"><table><thead><tr><th>Pembeli</th><th>Jumlah SJ terbuka</th><th>Sisa tagihan</th></tr></thead><tbody id="summary-buyers"></tbody></table></div></details>
+        <details><summary>Ringkasan penjualan per bulan</summary><div class="table-wrap"><table><thead><tr><th>Bulan</th><th>Penjualan bersih</th><th>Tagihan termasuk ongkir</th><th>Sudah dibayar</th><th>Sisa tagihan</th></tr></thead><tbody id="summary-months"></tbody></table></div></details>
+        <details><summary>Ringkasan penjualan per tahun</summary><div class="table-wrap"><table><thead><tr><th>Tahun</th><th>Penjualan bersih</th><th>Tagihan termasuk ongkir</th><th>Sudah dibayar</th><th>Sisa tagihan</th></tr></thead><tbody id="summary-years"></tbody></table></div><p>Transaksi tanpa tanggal tidak masuk ringkasan tahunan.</p></details>
         <p id="summary-status" role="status"></p>
       </section>
       <div class="bar">
@@ -40,7 +42,7 @@
     <dialog id="editor">
       <form id="entry">
         <h2 id="title"></h2>
-        <label>Tanggal <input name="tanggal" type="date" required></label>
+        <label>Tanggal SJ <input name="tanggal" type="date" required></label>
         <div id="fields"></div>
         <label>Keterangan <textarea name="keterangan" rows="2"></textarea></label>
         <div id="queued-wrap" hidden><h3>Rincian yang akan disimpan</h3><ul id="queued-list"></ul></div>
