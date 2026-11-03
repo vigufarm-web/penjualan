@@ -19,6 +19,13 @@ const fields = {
 };
 
 function message(element, text, error=false) { element.textContent=text; element.classList.toggle('error',error); }
+function rupiah(value){ return value==null||value===''||!Number.isFinite(Number(value)) ? '—' : 'Rp '+Number(value).toLocaleString('id-ID',{maximumFractionDigits:2}); }
+function nominalDisplay(row,table){
+  if(row.nominal!=null&&row.nominal!=='')return row.nominal;
+  const hasValue=value=>value!=null&&value!=='';
+  const hasInputs=table==='pisang_penjualan' ? hasValue(row.harga)&&(hasValue(row.jumlah_box)||hasValue(row.berat_kg)) : hasValue(row.harga_kg)&&hasValue(row.berat_kg);
+  return hasInputs?row.total:null;
+}
 function url(path) { return apiOrigin + '/api/input-client' + path; }
 async function api(path,method='GET',data) {
   let res;
@@ -60,7 +67,9 @@ async function refresh(){
   const titles=['Tanggal',...fields[table].map(f=>f[1]),'Total (Rp)','Keterangan','Aksi'];
   const head=document.createElement('tr');for(const title of titles){const th=document.createElement('th');th.textContent=title;head.append(th);}$('head').replaceChildren(head);
   $('rows').replaceChildren(...data.rows.map(row=>{
-    const tr=document.createElement('tr');for(const value of [row.tanggal,...fields[table].map(f=>row[f[0]]),row.total,row.keterangan])tr.insertCell().textContent=value??'—';
+    const tr=document.createElement('tr');
+    const columns=['tanggal',...fields[table].map(f=>f[0]),'total','keterangan'];
+    for(const key of columns){const cell=tr.insertCell(),value=key==='nominal'?nominalDisplay(row,table):row[key];cell.textContent=['harga','harga_kg','nominal','dibayar','total'].includes(key)?rupiah(value):(value??'—');if(key==='nominal'&&row.nominal==null&&value!=null)cell.title='Dihitung otomatis dari jumlah dan harga';}
     const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='Revisi';edit.addEventListener('click',()=>openEditor(row));
     const remove=document.createElement('button');remove.type='button';remove.className='secondary';remove.textContent='Hapus';remove.addEventListener('click',()=>deleteRow(table,row));tr.insertCell().append(edit,remove);return tr;
   }));
