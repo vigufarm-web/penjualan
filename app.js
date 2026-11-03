@@ -62,7 +62,16 @@ function drawSummary(){
   const values=[['Penjualan bersih',item?.net_sales],['Total tagihan termasuk ongkir',item?.billed],['Sudah dibayar',item?.paid],['Sisa tagihan',item?.outstanding]];
   $('summary-values').replaceChildren(...values.map(([label,value])=>{const card=document.createElement('div');card.className='dashboard-card';const name=document.createElement('span'),number=document.createElement('strong');name.textContent=label;number.textContent=rp(value);card.append(name,number);return card;}));
   const buyers=table.receivables.buyers.filter(b=>b.outstanding>0);
-  $('summary-buyers').replaceChildren(...buyers.map(b=>{const tr=document.createElement('tr');for(const value of [b.buyer,b.open_documents,rp(b.outstanding)])tr.insertCell().textContent=value;return tr;}));
+  $('summary-buyers').replaceChildren(...buyers.flatMap((b,index)=>{
+    const tr=document.createElement('tr');tr.insertCell().textContent=b.buyer;
+    const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent=`${b.open_documents} SJ · Lihat`;button.setAttribute('aria-expanded','false');button.setAttribute('aria-label',`Lihat ${b.open_documents} SJ terbuka untuk ${b.buyer}`);
+    tr.insertCell().append(button);tr.insertCell().textContent=rp(b.outstanding);
+    const detail=document.createElement('tr');detail.hidden=true;detail.id=`buyer-sj-${index}`;button.setAttribute('aria-controls',detail.id);
+    const cell=detail.insertCell();cell.colSpan=3;const wrap=document.createElement('div');wrap.className='table-wrap';const grid=document.createElement('table');
+    const head=grid.createTHead().insertRow();for(const title of ['Tanggal SJ','No. Surat Jalan','Asal gudang','Tagihan','Sudah dibayar','Sisa tagihan','Status']){const th=document.createElement('th');th.textContent=title;head.append(th);}
+    const body=grid.createTBody();for(const d of (b.documents||[]).filter(d=>Number(d.outstanding)>0)){const row=body.insertRow();for(const value of [d.date||'Belum ada',d.no_sj||'Belum ada',d.warehouse||'—',rp(d.amount),rp(d.paid),rp(d.outstanding),d.status||'—'])row.insertCell().textContent=value;}
+    wrap.append(grid);cell.append(wrap);button.addEventListener('click',()=>{detail.hidden=!detail.hidden;button.setAttribute('aria-expanded',String(!detail.hidden));button.textContent=`${b.open_documents} SJ · ${detail.hidden?'Lihat':'Tutup'}`;});return [tr,detail];
+  }));
   if(!buyers.length){const tr=document.createElement('tr'),td=tr.insertCell();td.colSpan=3;td.textContent='Tidak ada sisa tagihan tercatat.';$('summary-buyers').append(tr);}
   const monthly=table.months||[],keys=['net_sales','billed','paid','outstanding'],years=new Map();
   for(const m of monthly){const year=m.month.slice(0,4),y=years.get(year)||Object.fromEntries(keys.map(k=>[k,0]));for(const k of keys)y[k]+=Number(m[k]||0);years.set(year,y);}
