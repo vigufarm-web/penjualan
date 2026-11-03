@@ -64,6 +64,10 @@ function drawSummary(){
   const buyers=table.receivables.buyers.filter(b=>b.outstanding>0);
   $('summary-buyers').replaceChildren(...buyers.map(b=>{const tr=document.createElement('tr');for(const value of [b.buyer,b.open_documents,rp(b.outstanding)])tr.insertCell().textContent=value;return tr;}));
   if(!buyers.length){const tr=document.createElement('tr'),td=tr.insertCell();td.colSpan=3;td.textContent='Tidak ada sisa tagihan tercatat.';$('summary-buyers').append(tr);}
+  const monthly=table.months||[],keys=['net_sales','billed','paid','outstanding'],years=new Map();
+  for(const m of monthly){const year=m.month.slice(0,4),y=years.get(year)||Object.fromEntries(keys.map(k=>[k,0]));for(const k of keys)y[k]+=Number(m[k]||0);years.set(year,y);}
+  const render=(id,rows)=>{const body=$(id);body.replaceChildren(...rows.map(([label,item])=>{const tr=document.createElement('tr');for(const value of [label,...keys.map(k=>rp(item[k]))])tr.insertCell().textContent=value;return tr;}));if(!rows.length){const tr=document.createElement('tr'),td=tr.insertCell();td.colSpan=5;td.textContent='Belum ada transaksi bertanggal.';body.append(tr);}};
+  render('summary-months',monthly.map(m=>[m.month,m]));render('summary-years',[...years].sort((a,b)=>b[0].localeCompare(a[0])));
   message($('summary-status'),'');
 }
 async function loadSummary(){
@@ -74,7 +78,7 @@ async function refresh(){
   const ticket=++loadId, table=$('type').value;
   const data=await api('/records/'+table+'?'+new URLSearchParams({limit:'50',offset:String(offset),sort:'-tanggal'}));
   if(ticket!==loadId)return;
-  const titles=['Tanggal',...fields[table].map(f=>f[1]),'Total (Rp)','Keterangan','Aksi'];
+  const titles=['Tanggal SJ',...fields[table].map(f=>f[1]),'Total (Rp)','Keterangan','Aksi'];
   const head=document.createElement('tr');for(const title of titles){const th=document.createElement('th');th.textContent=title;head.append(th);}$('head').replaceChildren(head);
   $('rows').replaceChildren(...data.rows.map(row=>{
     const tr=document.createElement('tr');
@@ -103,6 +107,15 @@ function openEditor(row=null){
   $('entry').elements.tanggal.value=row?.tanggal??new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta'}).format(new Date());
   $('entry').elements.keterangan.value=row?.keterangan??'';
   $('fields').replaceChildren(...fields[table].map(([key,label,type,required])=>{
+    if(key==='gudang'){
+      const wrapper=document.createElement('label');wrapper.append(document.createTextNode(label));
+      const pick=document.createElement('select');pick.name='gudang_pilih';
+      for(const [value,text] of [['','Pilih gudang…'],['SMG','Semarang (SMG)'],['TGL','Tegal (TGL)'],['__other','Gudang lain…']]){const option=document.createElement('option');option.value=value;option.textContent=text;pick.append(option);}
+      const input=document.createElement('input');input.name='gudang';input.type='text';input.placeholder='Tulis nama gudang lain';
+      const value=row?.gudang??'';pick.value=!value?'':['SMG','TGL'].includes(value)?value:'__other';input.value=value;input.hidden=pick.value!=='__other';
+      pick.addEventListener('change',()=>{input.hidden=pick.value!=='__other';input.value=pick.value==='__other'?'':pick.value;if(!input.hidden)input.focus();});
+      wrapper.append(pick,input);return wrapper;
+    }
     const wrapper=document.createElement('label');wrapper.append(document.createTextNode(label));const input=document.createElement(Array.isArray(type)?'select':'input');input.name=key;input.required=!!required;
     if(Array.isArray(type)){
       for(const value of ['',...type]){const option=document.createElement('option');option.value=value;option.textContent=value||'Pilih…';input.append(option);}
@@ -115,9 +128,10 @@ function openEditor(row=null){
     if(!row)f.tipe.value='Penjualan';
     const hint=document.createElement('p');hint.textContent='Gudang dibaca dari kode SMG/TGL pada nomor SJ. Isi jenis barang atau pilih bentuk, kelas, dan kondisi; periksa isian sebelum menyimpan.';$('fields').prepend(hint);
     const initialProduct=deriveProduct(f.jenis_barang.value),initialWarehouse=deriveWarehouse(f.no_sj.value);
-    let autoGudang=f.gudang.value&&f.gudang.value===initialWarehouse?initialWarehouse:'',autoProduct={};
+    let autoGudang=f.gudang.value&&f.gudang.value===initialWarehouse?initialWarehouse:'',warehouseOverridden=!!f.gudang.value&&f.gudang.value!==initialWarehouse,autoProduct={};
     for(const key of ['bentuk','kelas','kondisi'])if(f[key].value&&f[key].value===initialProduct[key])autoProduct[key]=f[key].value;
-    const updateWarehouse=()=>{if(!f.gudang.value||f.gudang.value===autoGudang){autoGudang=deriveWarehouse(f.no_sj.value);f.gudang.value=autoGudang;}};
+    const updateWarehouse=()=>{if(!warehouseOverridden&&f.gudang_pilih.value!=='__other'&&(!f.gudang.value||f.gudang.value===autoGudang)){autoGudang=deriveWarehouse(f.no_sj.value);f.gudang.value=autoGudang;f.gudang_pilih.value=autoGudang;}};
+    f.gudang_pilih.addEventListener('change',()=>{warehouseOverridden=!!f.gudang_pilih.value;if(!warehouseOverridden)updateWarehouse();});
     const updateProduct=()=>{const inferred=deriveProduct(f.jenis_barang.value);for(const key of ['bentuk','kelas','kondisi'])if(!f[key].value||f[key].value===autoProduct[key]){autoProduct[key]=inferred[key]||'';f[key].value=autoProduct[key];}};
     f.no_sj.addEventListener('input',updateWarehouse);f.jenis_barang.addEventListener('input',updateProduct);updateWarehouse();updateProduct();
     const wrap=document.createElement('label');wrap.textContent='Dasar harga jika box dan kg sama-sama diisi';const basis=document.createElement('select');basis.id='price-basis';for(const [value,label] of [['','Pilih jika diperlukan'],['box','Harga per box'],['kg','Harga per kg']]){const option=document.createElement('option');option.value=value;option.textContent=label;basis.append(option);}wrap.append(basis);$('fields').append(wrap);
@@ -126,6 +140,8 @@ function openEditor(row=null){
 }
 function readCurrent(){
   const table=$('type').value,data=Object.fromEntries(new FormData($('entry')));
+  delete data.gudang_pilih;
+  if(table==='pisang_penjualan' && $('entry').elements.gudang_pilih.value==='__other'&&!String(data.gudang||'').trim())throw new Error('Isi nama gudang lain atau pilih gudang yang tersedia.');
   for(const [key,,type] of fields[table])if(type==='number'||type==='integer')data[key]=data[key]===''?null:Number(data[key]);
   if(!editing&&(!String(data.no_sj||'').trim()||!String(data.pembeli||'').trim()))throw new Error('Isi nomor surat jalan dan pembeli.');
   const details=table==='pisang_penjualan'?['jenis_barang','bentuk','kelas','kondisi','jumlah_box','berat_kg','harga','nominal']:['jenis','jumlah_sak','berat_kg','harga_kg','nominal'];
