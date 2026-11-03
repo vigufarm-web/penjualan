@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Penjualan Kebun · VIGU</title>
   <link rel="stylesheet" href="./style.css">
-  <script type="module" src="./app.js?v=20261103-dashboard"></script>
+  <script type="module" src="./app.js?v=20261103-rincian"></script>
 </head>
 <body>
   <header><div><span class="brand">VIGU</span> PT Vigu Farm Indonesia</div><a href="https://laporankebun.vercel.app/">Dashboard Laporan Kebun ↗</a></header>
@@ -43,6 +43,8 @@
         <label>Tanggal <input name="tanggal" type="date" required></label>
         <div id="fields"></div>
         <label>Keterangan <textarea name="keterangan" rows="2"></textarea></label>
+        <div id="queued-wrap" hidden><h3>Rincian yang akan disimpan</h3><ul id="queued-list"></ul></div>
+        <button id="queue-detail" type="button" class="secondary" hidden>Tambah rincian lain untuk SJ ini</button>
         <div id="warning" hidden><p id="warning-text" role="alert"></p><label><input id="warning-confirm" type="checkbox" style="width:auto"> Saya sudah memeriksa dan tetap ingin menyimpan rincian ini.</label></div>
         <p id="message" role="status"></p>
         <div class="bar"><button id="cancel" type="button" class="secondary">Batal</button><button id="save">Simpan</button></div>

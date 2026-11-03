@@ -2,6 +2,7 @@ const $ = id => document.getElementById(id);
 const apiOrigin = location.hostname === 'vigufarm-web.github.io' ? 'https://laporankebun.vercel.app' : location.origin;
 let token = '', offset = 0, editing = null, busy = false, warningSignature = null, loadId = 0;
 let summaryData = null;
+let queued=[], batchKey='', batchSignature='';
 const fields = {
   pisang_penjualan: [
     ['no_sj','No. Surat Jalan','text'], ['gudang','Asal gudang','text'], ['pembeli','Pembeli','text'],
@@ -60,14 +61,25 @@ async function refresh(){
   const head=document.createElement('tr');for(const title of titles){const th=document.createElement('th');th.textContent=title;head.append(th);}$('head').replaceChildren(head);
   $('rows').replaceChildren(...data.rows.map(row=>{
     const tr=document.createElement('tr');for(const value of [row.tanggal,...fields[table].map(f=>row[f[0]]),row.total,row.keterangan])tr.insertCell().textContent=value??'—';
-    const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='Revisi';edit.addEventListener('click',()=>openEditor(row));tr.insertCell().append(edit);return tr;
+    const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='Revisi';edit.addEventListener('click',()=>openEditor(row));
+    const remove=document.createElement('button');remove.type='button';remove.className='secondary';remove.textContent='Hapus';remove.addEventListener('click',()=>deleteRow(table,row));tr.insertCell().append(edit,remove);return tr;
   }));
   $('range').textContent=data.total?`${data.offset+1}–${data.offset+data.rows.length} dari ${data.total}`:'Belum ada data';
   $('prev').disabled=data.offset===0;$('next').disabled=data.offset+data.rows.length>=data.total;
 }
+async function deleteRow(table,row){
+  const label=[row.tanggal,row.no_sj,row.pembeli,row.jenis_barang||row.jenis||row.tipe].filter(Boolean).join(' · ');
+  if(!window.confirm('Hapus satu rincian ini?\n'+label+'\n\nRincian lain pada surat jalan yang sama tetap ada.'))return;
+  try{
+    if(!row.updated_at)throw new Error('Versi data tidak tersedia. Muat ulang sebelum menghapus.');
+    await api('/t/'+table+'/'+row.id+'?'+new URLSearchParams({updated_at:row.updated_at}),'DELETE');
+    await refresh();loadSummary();message($('status'),'Rincian berhasil dihapus.');
+  }catch(error){message($('status'),error.message,true);}
+}
 function openEditor(row=null){
-  editing=row;warningSignature=null;$('entry').reset();$('warning').hidden=true;$('warning-confirm').checked=false;message($('message'),'');
+  editing=row;queued=[];batchKey='';batchSignature='';warningSignature=null;$('entry').reset();$('warning').hidden=true;$('warning-confirm').checked=false;message($('message'),'');
   const table=$('type').value;$('title').textContent=(row?'Revisi ':'Tambah ')+(table==='pisang_penjualan'?'penjualan Pisang':'penjualan Padi');
+  $('queued-wrap').hidden=true;$('queued-list').replaceChildren();$('queue-detail').hidden=!!row;
   $('entry').elements.tanggal.value=row?.tanggal??new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta'}).format(new Date());
   $('entry').elements.keterangan.value=row?.keterangan??'';
   $('fields').replaceChildren(...fields[table].map(([key,label,type,required])=>{
@@ -75,11 +87,46 @@ function openEditor(row=null){
     if(Array.isArray(type)){
       for(const value of ['',...type]){const option=document.createElement('option');option.value=value;option.textContent=value||'Pilih…';input.append(option);}
       if(row?.[key]&&!type.includes(row[key])){const option=document.createElement('option');option.value=row[key];option.textContent=row[key];input.append(option);}
-    }else{input.type=type==='integer'||type==='number'?'number':type;if(type==='integer'||type==='number'){input.min='0';input.step=type==='integer'?'1':'any';}}
+    }else{input.type=type==='integer'||type==='number'?'number':type;if(type==='integer'||type==='number'){if(!['jumlah_box','berat_kg','nominal','dibayar'].includes(key))input.min='0';input.step=type==='integer'?'1':'any';}}
     input.value=row?.[key]??'';wrapper.append(input);return wrapper;
   }));
+  if(table==='pisang_penjualan'){
+    const form=$('entry'),f=form.elements;
+    if(!row)f.tipe.value='Penjualan';
+    const hint=document.createElement('p');hint.textContent='Gudang dibaca dari kode SMG/TGL pada nomor SJ. Isi jenis barang atau pilih bentuk, kelas, dan kondisi; periksa isian sebelum menyimpan.';$('fields').prepend(hint);
+    let autoGudang='',autoProduct={};
+    f.no_sj.addEventListener('input',()=>{const codes=new Set(String(f.no_sj.value).toUpperCase().split(/[^A-Z0-9]+/).filter(x=>['SMG','TGL'].includes(x)));if(!f.gudang.value||f.gudang.value===autoGudang){autoGudang=codes.size===1?[...codes][0]:'';f.gudang.value=autoGudang;}});
+    f.jenis_barang.addEventListener('input',()=>{const tokens=String(f.jenis_barang.value).toUpperCase().split(/[^A-Z0-9]+/);for(const [key,values] of [['bentuk',['FH','CL','SL']],['kelas',['A','B','C','MIX']],['kondisi',['MATANG','MENTAH','REJECT']]]){const hits=[...new Set(tokens.filter(x=>values.includes(x)))];if(!f[key].value||f[key].value===autoProduct[key]){const option=hits.length===1?[...f[key].options].find(o=>o.value.toUpperCase()===hits[0]):null;autoProduct[key]=option?.value||'';f[key].value=autoProduct[key];}}});
+    const wrap=document.createElement('label');wrap.textContent='Dasar harga jika box dan kg sama-sama diisi';const basis=document.createElement('select');basis.id='price-basis';for(const [value,label] of [['','Pilih jika diperlukan'],['box','Harga per box'],['kg','Harga per kg']]){const option=document.createElement('option');option.value=value;option.textContent=label;basis.append(option);}wrap.append(basis);$('fields').append(wrap);
+  }
   $('editor').showModal();
 }
+function readCurrent(){
+  const table=$('type').value,data=Object.fromEntries(new FormData($('entry')));
+  for(const [key,,type] of fields[table])if(type==='number'||type==='integer')data[key]=data[key]===''?null:Number(data[key]);
+  if(!editing&&(!String(data.no_sj||'').trim()||!String(data.pembeli||'').trim()))throw new Error('Isi nomor surat jalan dan pembeli.');
+  const details=table==='pisang_penjualan'?['jenis_barang','bentuk','kelas','kondisi','jumlah_box','berat_kg','harga','nominal']:['jenis','jumlah_sak','berat_kg','harga_kg','nominal'];
+  if(!details.some(k=>data[k]!==null&&data[k]!==''&&data[k]!==undefined))throw new Error('Isi rincian barang atau nominal sebelum menyimpan.');
+  if(table==='pisang_penjualan' && data.jumlah_box && data.berat_kg && data.nominal===null){
+    const basis=$('price-basis').value;if(!basis)throw new Error('Box dan kg sama-sama terisi. Pilih dasar harga atau isi nominal langsung.');
+    data.nominal=Number(data.harga||0)*Number(basis==='box'?data.jumlah_box:data.berat_kg);
+  }
+  return data;
+}
+function redrawQueued(){
+  $('queued-wrap').hidden=queued.length===0;
+  $('queued-list').replaceChildren(...queued.map((row,index)=>{const li=document.createElement('li');li.textContent=[row.tipe,row.jenis_barang||row.jenis||'rincian',row.jumlah_box?row.jumlah_box+' box':'',row.berat_kg?row.berat_kg+' kg':'',row.nominal!==null?'Rp '+Number(row.nominal).toLocaleString('id-ID'):''].filter(Boolean).join(' · ')+' ';const button=document.createElement('button');button.type='button';button.className='secondary';button.textContent='Hapus rincian';button.addEventListener('click',()=>{queued.splice(index,1);redrawQueued();});li.append(button);return li;}));
+}
+$('queue-detail').addEventListener('click',()=>{
+  try{
+    if(!$('entry').reportValidity())return;
+    const item=readCurrent();queued.push(item);redrawQueued();
+    const f=$('entry').elements;
+    for(const key of ['jenis_barang','bentuk','kelas','kondisi','jumlah_box','berat_kg','harga','nominal','dibayar','jenis','jumlah_sak','harga_kg','keterangan'])if(f[key])f[key].value='';
+    if(f.tipe)f.tipe.value='Penjualan';if($('price-basis'))$('price-basis').value='';
+    message($('message'),'Rincian disiapkan. Isi rincian berikutnya, lalu tekan Simpan untuk semuanya.');
+  }catch(error){message($('message'),error.message,true);}
+});
 async function duplicates(table,value){
   const sj=String(value||'').trim();if(!sj)return [];
   const result=[];for(let start=0;;start+=100){
@@ -91,11 +138,11 @@ async function duplicates(table,value){
 }
 async function save(event){
   event.preventDefault();if(busy)return;
-  const table=$('type').value,data=Object.fromEntries(new FormData($('entry')));
-  for(const [key,,type] of fields[table])if(type==='number'||type==='integer')data[key]=data[key]===''?null:Number(data[key]);
+  const table=$('type').value;let data;try{data=readCurrent();}catch(error){message($('message'),error.message,true);return;}
   busy=true;$('save').disabled=true;$('cancel').disabled=true;
   try{
-    const existing=await duplicates(table,data.no_sj),warn=existing.length>0||!String(data.no_sj||'').trim();
+    const sjChanged=!editing||String(editing.no_sj||'').trim().toUpperCase()!==String(data.no_sj||'').trim().toUpperCase();
+    const existing=sjChanged?await duplicates(table,data.no_sj):[],warn=existing.length>0||!String(data.no_sj||'').trim();
     const signature=JSON.stringify({data,matches:existing.map(r=>[r.id,r.updated_at])});
     if(warn&&(signature!==warningSignature||!$('warning-confirm').checked)){
       warningSignature=signature;$('warning-confirm').checked=false;
@@ -103,7 +150,12 @@ async function save(event){
       $('warning-text').textContent=existing.length?`Nomor SJ sudah ada pada ${existing.length} baris: ${details}. Periksa apakah rincian tambahan sah. Untuk mengubah data lama, pilih Revisi.`:'Nomor SJ kosong sehingga tidak dapat diperiksa kesamaannya. Periksa daftar sebelum menyimpan.';
       $('warning').hidden=false;message($('message'),'Centang setelah memeriksa, lalu tekan Simpan lagi.',true);return;
     }
-    if(editing)await api('/t/'+table+'/'+editing.id,'PUT',{...data,updated_at:editing.updated_at??null});else await api('/t/'+table,'POST',data);
+    if(editing)await api('/t/'+table+'/'+editing.id,'PUT',{...data,updated_at:editing.updated_at??null});else{
+      const salesBatch=[...queued,data].map(item=>({...item,tanggal:data.tanggal,no_sj:data.no_sj,pembeli:data.pembeli,...(table==='pisang_penjualan'?{gudang:data.gudang}:{})}));
+      if(new Set(salesBatch.map(item=>JSON.stringify(item))).size!==salesBatch.length)throw new Error('Ada rincian yang identik. Periksa sebelum menyimpan.');
+      const currentSignature=JSON.stringify(salesBatch);if(currentSignature!==batchSignature){batchKey=crypto.randomUUID();batchSignature=currentSignature;}
+      await api('/t/'+table,'POST',{batchId:batchKey,salesBatch});
+    }
     $('editor').close();offset=0;await refresh();loadSummary();message($('status'),'Data tersimpan.');
   }catch(error){message($('message'),error.message,true);}finally{busy=false;$('save').disabled=false;$('cancel').disabled=false;}
 }
