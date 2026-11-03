@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 const apiOrigin = location.hostname === 'vigufarm-web.github.io' ? 'https://laporankebun.vercel.app' : location.origin;
 let token = '', offset = 0, editing = null, busy = false, warningSignature = null, loadId = 0;
+let summaryData = null;
 const fields = {
   pisang_penjualan: [
     ['no_sj','No. Surat Jalan','text'], ['gudang','Asal gudang','text'], ['pembeli','Pembeli','text'],
@@ -33,7 +34,23 @@ async function api(path,method='GET',data) {
 async function showSession(){
   const {user}=await api('/me');$('login').hidden=!!user;$('sales').hidden=!user;
   if(!user){message($('status'),'Masuk dengan akun penjualan.');return;}
-  message($('status'),`Masuk sebagai ${user.nama||user.username}.`);await refresh();
+  message($('status'),`Masuk sebagai ${user.nama||user.username}.`);await refresh();loadSummary();
+}
+function drawSummary(){
+  const table=summaryData?.tables.find(item=>item.table===$('type').value);
+  if(!table)return;
+  const item=table.selectedPeriods.find(p=>p.month===$('summary-month').value&&p.part===$('summary-part').value);
+  const rp=value=>'Rp '+Number(value||0).toLocaleString('id-ID',{maximumFractionDigits:2});
+  const values=[['Penjualan bersih',item?.net_sales],['Total tagihan termasuk ongkir',item?.billed],['Sudah dibayar',item?.paid],['Sisa tagihan',item?.outstanding]];
+  $('summary-values').replaceChildren(...values.map(([label,value])=>{const card=document.createElement('div');card.className='dashboard-card';const name=document.createElement('span'),number=document.createElement('strong');name.textContent=label;number.textContent=rp(value);card.append(name,number);return card;}));
+  const buyers=table.receivables.buyers.filter(b=>b.outstanding>0);
+  $('summary-buyers').replaceChildren(...buyers.map(b=>{const tr=document.createElement('tr');for(const value of [b.buyer,b.open_documents,rp(b.outstanding)])tr.insertCell().textContent=value;return tr;}));
+  if(!buyers.length){const tr=document.createElement('tr'),td=tr.insertCell();td.colSpan=3;td.textContent='Tidak ada sisa tagihan tercatat.';$('summary-buyers').append(tr);}
+  message($('summary-status'),'');
+}
+async function loadSummary(){
+  try{summaryData=await api('/excel/summary?tables=pisang_penjualan,padi_penjualan');if(!$('summary-month').value)$('summary-month').value=summaryData.today.slice(0,7);drawSummary();}
+  catch(error){message($('summary-status'),'Ringkasan belum tersedia: '+error.message,true);}
 }
 async function refresh(){
   const ticket=++loadId, table=$('type').value;
@@ -87,7 +104,7 @@ async function save(event){
       $('warning').hidden=false;message($('message'),'Centang setelah memeriksa, lalu tekan Simpan lagi.',true);return;
     }
     if(editing)await api('/t/'+table+'/'+editing.id,'PUT',{...data,updated_at:editing.updated_at??null});else await api('/t/'+table,'POST',data);
-    $('editor').close();offset=0;await refresh();message($('status'),'Data tersimpan.');
+    $('editor').close();offset=0;await refresh();loadSummary();message($('status'),'Data tersimpan.');
   }catch(error){message($('message'),error.message,true);}finally{busy=false;$('save').disabled=false;$('cancel').disabled=false;}
 }
 async function excel(){
@@ -97,7 +114,8 @@ async function excel(){
 }
 $('login').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;try{await api('/login','POST',Object.fromEntries(new FormData(form)));form.reset();await showSession();}catch(error){message($('status'),error.message,true);}finally{button.disabled=false;}});
 $('logout').addEventListener('click',async()=>{try{await api('/logout','POST');offset=0;await showSession();}catch(error){message($('status'),error.message,true);}});
-$('type').addEventListener('change',()=>{offset=0;refresh().catch(e=>message($('status'),e.message,true));});
+$('type').addEventListener('change',()=>{offset=0;drawSummary();refresh().catch(e=>message($('status'),e.message,true));});
+$('summary-month').addEventListener('change',drawSummary);$('summary-part').addEventListener('change',drawSummary);
 $('prev').addEventListener('click',()=>{offset=Math.max(0,offset-50);refresh().catch(e=>message($('status'),e.message,true));});
 $('next').addEventListener('click',()=>{offset+=50;refresh().catch(e=>message($('status'),e.message,true));});
 $('add').addEventListener('click',()=>openEditor());$('cancel').addEventListener('click',()=>$('editor').close());

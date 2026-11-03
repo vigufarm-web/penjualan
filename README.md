@@ -2,10 +2,10 @@
 
 Tampilan khusus penjualan Pisang dan Padi untuk PT Vigu Farm Indonesia. Repositori berisi kode tampilan; data, kata sandi, dan token tidak disimpan di sini.
 
-## Status
+## Penggunaan
 
-Masih dalam pengujian. Sambungan `/api/input-client/` pada layanan Laporan Kebun harus disiapkan dan diuji sebelum GitHub Pages digunakan untuk transaksi sebenarnya. Login menggunakan sesi sementara di memori browser; pengguna masuk lagi setelah halaman dimuat ulang.
+GitHub Pages menyajikan tampilan di https://vigufarm-web.github.io/penjualan/. Login, hak akses, dan data penjualan menggunakan layanan Laporan Kebun yang sudah ada. Akun mandor tidak diberi akses penjualan. Sesi disimpan sementara di memori browser dan pengguna masuk lagi setelah halaman dimuat ulang. Kata sandi, token, dan data transaksi tidak disimpan di repositori ini.
 
-Pembatasan penjualan harus diberlakukan oleh layanan, bukan hanya dengan menyembunyikan menu. Data lama tetap di sumber saat ini hingga proses penyambungan, cadangan, dan pemeriksaan selesai.
+Ringkasan mendukung pilihan bulan, tanggal 1–15, 16–akhir, dan sebulan penuh. Pembayaran dalam ringkasan periode mengikuti tanggal surat jalan yang bersangkutan. Pemeriksaan nomor surat jalan ganda membantu menemukan kemungkinan duplikat; pengguna tetap perlu memeriksa rincian sebelum menyimpan.
 
-Rancangan perubahan layanan tersedia sebagai `layanan-penjualan.patch`, berbasis `vigufarm-web/laporankebun` revisi `17fb47ae01a4dc11ca0e51bfb518afd259b3596c`. Patch ini belum diterapkan pada layanan produksi.
+Sambungan layanan diterapkan melalui [PR 69](https://github.com/vigufarm-web/laporankebun/pull/69), dan ringkasan periode melalui [PR 70](https://github.com/vigufarm-web/laporankebun/pull/70). Berkas `layanan-penjualan.patch` merupakan rancangan awal, bukan sumber konfigurasi produksi.

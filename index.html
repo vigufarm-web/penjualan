@@ -22,6 +22,14 @@
     <section id="sales" class="panel" hidden>
       <div class="bar"><h2>Penjualan Pisang &amp; Padi</h2><button id="logout" class="secondary" type="button">Keluar</button></div>
       <p>Untuk revisi, pilih baris lama. Periksa nomor surat jalan sebelum menambah rincian.</p>
+      <section class="panel" aria-labelledby="summary-title">
+        <h3 id="summary-title">Ringkasan penjualan dan piutang</h3>
+        <div class="bar"><label>Bulan <input id="summary-month" type="month"></label><label>Periode <select id="summary-part"><option value="full">Sebulan penuh</option><option value="first">Tanggal 1–15</option><option value="second">Tanggal 16–akhir bulan</option></select></label></div>
+        <div id="summary-values" class="dashboard-grid"></div>
+        <p>Pembayaran mengikuti surat jalan pada periode yang dipilih, bukan tanggal transfer. Piutang per pembeli mencakup seluruh data tercatat.</p>
+        <details><summary>Pembeli dengan sisa tagihan</summary><div class="table-wrap"><table><thead><tr><th>Pembeli</th><th>Jumlah SJ terbuka</th><th>Sisa tagihan</th></tr></thead><tbody id="summary-buyers"></tbody></table></div></details>
+        <p id="summary-status" role="status"></p>
+      </section>
       <div class="bar">
         <label>Jenis data <select id="type"><option value="pisang_penjualan">Penjualan Pisang</option><option value="padi_penjualan">Penjualan Padi</option></select></label>
         <div class="bar"><button id="excel" type="button" class="secondary">Unduh Excel</button><button id="add" type="button">Tambah</button></div>
