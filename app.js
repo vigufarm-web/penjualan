@@ -7,7 +7,7 @@ const fields = {
   pisang_penjualan: [
     ['no_sj','No. Surat Jalan','text'], ['gudang','Asal gudang','text'], ['pembeli','Pembeli','text'],
     ['tipe','Tipe',['Penjualan','Sampel','Retur','Mutasi Internal','Ongkir'],true], ['jenis_barang','Jenis barang','text'],
-    ['bentuk','Bentuk',['FH','CL','SL']], ['kelas','Kelas',['A','B','C','MIX','Reject']], ['kondisi','Kondisi',['Matang','Mentah','Reject']],
+    ['bentuk','Bentuk',['FH','CL','SL','FH-CL']], ['kelas','Kelas',['A','B','C','MIX','Reject']], ['kondisi','Kondisi',['Matang','Mentah','Reject']],
     ['jumlah_box','Jumlah box','integer'], ['berat_kg','Berat (kg)','number'], ['harga','Harga per satuan (Rp)','number'],
     ['nominal','Nominal (Rp), kosongkan untuk hitung otomatis','number'], ['dibayar','Sudah dibayar (Rp)','number'],
   ],
@@ -25,6 +25,16 @@ function nominalDisplay(row,table){
   const hasValue=value=>value!=null&&value!=='';
   const hasInputs=table==='pisang_penjualan' ? hasValue(row.harga)&&(hasValue(row.jumlah_box)||hasValue(row.berat_kg)) : hasValue(row.harga_kg)&&hasValue(row.berat_kg);
   return hasInputs?row.total:null;
+}
+function deriveWarehouse(sj){
+  const codes=new Set(String(sj||'').toUpperCase().split(/[^A-Z0-9]+/).map(x=>({SMG:'SMG',SEMARANG:'SMG',TGL:'TGL',TEGAL:'TGL'})[x]).filter(Boolean));
+  return codes.size===1?[...codes][0]:'';
+}
+function deriveProduct(name){
+  const tokens=String(name||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).flatMap(w=>{const a=w.match(/^(FH|CL|SL)(A|B|C|MIX)$/),b=w.match(/^(A|B|C)(FH|CL|SL)$/);return a?[a[1],a[2]]:b?[b[2],b[1]]:[w];});
+  const distinct=values=>[...new Set(tokens.filter(x=>values.includes(x)))];
+  const shapes=distinct(['FH','CL','SL']),classes=distinct(['A','B','C','MIX']),conditions=distinct(['MATANG','MENTAH','REJECT']);
+  return {bentuk:shapes.length===1?shapes[0]:shapes.length===2&&shapes.includes('FH')&&shapes.includes('CL')?'FH-CL':'',kelas:classes.length===1?classes[0]:conditions.length===1&&conditions[0]==='REJECT'?'Reject':'',kondisi:conditions.length===1?({MATANG:'Matang',MENTAH:'Mentah',REJECT:'Reject'})[conditions[0]]:''};
 }
 function url(path) { return apiOrigin + '/api/input-client' + path; }
 async function api(path,method='GET',data) {
@@ -69,7 +79,8 @@ async function refresh(){
   $('rows').replaceChildren(...data.rows.map(row=>{
     const tr=document.createElement('tr');
     const columns=['tanggal',...fields[table].map(f=>f[0]),'total','keterangan'];
-    for(const key of columns){const cell=tr.insertCell(),value=key==='nominal'?nominalDisplay(row,table):row[key];cell.textContent=['harga','harga_kg','nominal','dibayar','total'].includes(key)?rupiah(value):(value??'—');if(key==='nominal'&&row.nominal==null&&value!=null)cell.title='Dihitung otomatis dari jumlah dan harga';}
+    const inferred=table==='pisang_penjualan'?{gudang:deriveWarehouse(row.no_sj),...deriveProduct(row.jenis_barang)}:{};
+    for(const key of columns){const cell=tr.insertCell(),raw=row[key],value=key==='nominal'?nominalDisplay(row,table):((raw==null||raw==='')&&inferred[key]?inferred[key]:raw);cell.textContent=['harga','harga_kg','nominal','dibayar','total'].includes(key)?rupiah(value):(value??'—');if(key==='nominal'&&row.nominal==null&&value!=null)cell.title='Dihitung otomatis dari jumlah dan harga';if((raw==null||raw==='')&&inferred[key])cell.title='Dibaca otomatis dari data yang tersedia';}
     const edit=document.createElement('button');edit.type='button';edit.className='secondary';edit.textContent='Revisi';edit.addEventListener('click',()=>openEditor(row));
     const remove=document.createElement('button');remove.type='button';remove.className='secondary';remove.textContent='Hapus';remove.addEventListener('click',()=>deleteRow(table,row));tr.insertCell().append(edit,remove);return tr;
   }));
@@ -103,9 +114,12 @@ function openEditor(row=null){
     const form=$('entry'),f=form.elements;
     if(!row)f.tipe.value='Penjualan';
     const hint=document.createElement('p');hint.textContent='Gudang dibaca dari kode SMG/TGL pada nomor SJ. Isi jenis barang atau pilih bentuk, kelas, dan kondisi; periksa isian sebelum menyimpan.';$('fields').prepend(hint);
-    let autoGudang='',autoProduct={};
-    f.no_sj.addEventListener('input',()=>{const codes=new Set(String(f.no_sj.value).toUpperCase().split(/[^A-Z0-9]+/).filter(x=>['SMG','TGL'].includes(x)));if(!f.gudang.value||f.gudang.value===autoGudang){autoGudang=codes.size===1?[...codes][0]:'';f.gudang.value=autoGudang;}});
-    f.jenis_barang.addEventListener('input',()=>{const tokens=String(f.jenis_barang.value).toUpperCase().split(/[^A-Z0-9]+/);for(const [key,values] of [['bentuk',['FH','CL','SL']],['kelas',['A','B','C','MIX']],['kondisi',['MATANG','MENTAH','REJECT']]]){const hits=[...new Set(tokens.filter(x=>values.includes(x)))];if(!f[key].value||f[key].value===autoProduct[key]){const option=hits.length===1?[...f[key].options].find(o=>o.value.toUpperCase()===hits[0]):null;autoProduct[key]=option?.value||'';f[key].value=autoProduct[key];}}});
+    const initialProduct=deriveProduct(f.jenis_barang.value),initialWarehouse=deriveWarehouse(f.no_sj.value);
+    let autoGudang=f.gudang.value&&f.gudang.value===initialWarehouse?initialWarehouse:'',autoProduct={};
+    for(const key of ['bentuk','kelas','kondisi'])if(f[key].value&&f[key].value===initialProduct[key])autoProduct[key]=f[key].value;
+    const updateWarehouse=()=>{if(!f.gudang.value||f.gudang.value===autoGudang){autoGudang=deriveWarehouse(f.no_sj.value);f.gudang.value=autoGudang;}};
+    const updateProduct=()=>{const inferred=deriveProduct(f.jenis_barang.value);for(const key of ['bentuk','kelas','kondisi'])if(!f[key].value||f[key].value===autoProduct[key]){autoProduct[key]=inferred[key]||'';f[key].value=autoProduct[key];}};
+    f.no_sj.addEventListener('input',updateWarehouse);f.jenis_barang.addEventListener('input',updateProduct);updateWarehouse();updateProduct();
     const wrap=document.createElement('label');wrap.textContent='Dasar harga jika box dan kg sama-sama diisi';const basis=document.createElement('select');basis.id='price-basis';for(const [value,label] of [['','Pilih jika diperlukan'],['box','Harga per box'],['kg','Harga per kg']]){const option=document.createElement('option');option.value=value;option.textContent=label;basis.append(option);}wrap.append(basis);$('fields').append(wrap);
   }
   $('editor').showModal();
