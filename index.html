@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Penjualan Kebun · VIGU</title>
   <link rel="stylesheet" href="./style.css?v=20261103-tabel">
-  <script type="module" src="./app.js?v=20261103-rincian-sj"></script>
+  <script type="module" src="./app.js?v=20261104-excel-upload"></script>
 </head>
 <body>
   <header><div><span class="brand">VIGU</span> PT Vigu Farm Indonesia</div><a href="https://laporankebun.vercel.app/">Dashboard Laporan Kebun ↗</a></header>
@@ -34,8 +34,22 @@
       </section>
       <div class="bar">
         <label>Jenis data <select id="type"><option value="pisang_penjualan">Penjualan Pisang</option><option value="padi_penjualan">Penjualan Padi</option></select></label>
-        <div class="bar"><button id="excel" type="button" class="secondary">Unduh Excel</button><button id="add" type="button">Tambah</button></div>
+        <div class="bar"><button id="excel" type="button" class="secondary">Unduh laporan Excel</button><button id="template" type="button" class="secondary">Unduh template update</button><button id="add" type="button">Tambah</button></div>
       </div>
+      <details class="panel" style="margin:1rem 0">
+        <summary><strong>Update lewat Excel dan panduan kerja</strong></summary>
+        <ol>
+          <li>Pilih Penjualan Pisang atau Padi, lalu klik <strong>Unduh template update</strong>. Pakai file terbaru setiap kali akan mengubah data.</li>
+          <li>Buka sheet data Penjualan. Untuk <strong>revisi</strong>, ubah baris lama dan pertahankan kolom ID dan versi baris. Untuk <strong>tambahan</strong>, isi baris baru dan biarkan ID serta versi kosong. Simpan sebagai .xlsx.</li>
+          <li>Pilih file di bawah, klik <strong>Periksa Excel</strong>, lalu tinjau jumlah tambahan, revisi, rincian dan pesan pemeriksaan. Jika sudah benar, klik <strong>Terapkan perubahan</strong>.</li>
+          <li>Jika ada pesan versi lama, unduh template baru dan pindahkan revisi ke baris yang sesuai. Jika ada calon duplikat, periksa nomor SJ, pembeli dan jenis barang; revisi baris lama, atau tambahkan rincian sah melalui tombol Tambah di aplikasi.</li>
+          <li>Menghapus baris Excel <strong>tidak menghapus</strong> data di aplikasi. Gunakan tombol Hapus pada rincian yang salah. Satu SJ boleh memiliki beberapa jenis barang.</li>
+          <li>Setelah berhasil, periksa ringkasan dan unduh template baru untuk perubahan berikutnya. Jumlah pembayaran diisi pada kolom Sudah dibayar; nominal dapat dihitung otomatis atau diisi manual untuk ongkir.</li>
+        </ol>
+        <label>File template yang sudah diisi <input id="excel-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+        <div class="bar"><button id="excel-preview" type="button" class="secondary">Periksa Excel</button><button id="excel-apply" type="button" disabled>Terapkan perubahan</button></div>
+        <p id="excel-status" role="status" aria-live="polite"></p><div id="excel-result" class="table-wrap"></div>
+      </details>
       <div class="table-wrap"><table><thead id="head"></thead><tbody id="rows"></tbody></table></div>
       <div class="bar"><button id="prev" type="button" class="secondary">Sebelumnya</button><span id="range"></span><button id="next" type="button" class="secondary">Berikutnya</button></div>
     </section>
