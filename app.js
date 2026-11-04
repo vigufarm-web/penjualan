@@ -207,18 +207,49 @@ async function save(event){
     $('editor').close();offset=0;await refresh();loadSummary();message($('status'),'Data tersimpan.');
   }catch(error){message($('message'),error.message,true);}finally{busy=false;$('save').disabled=false;$('cancel').disabled=false;}
 }
-async function excel(){
-  const table=$('type').value,res=await fetch(url('/excel/download?tables='+encodeURIComponent(table)),{credentials:'omit',headers:{Authorization:'Bearer '+token}});
+async function excel(template=false){
+  const table=$('type').value,res=await fetch(url('/excel/download?tables='+encodeURIComponent(table)+(template?'&template=1':'')),{credentials:'omit',headers:{Authorization:'Bearer '+token}});
   if(!res.ok){const error=await res.json().catch(()=>null);throw new Error(error?.error||'Excel belum dapat diunduh.');}
-  const object=URL.createObjectURL(await res.blob()),link=document.createElement('a');link.href=object;link.download='Penjualan - '+table+'.xlsx';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(object),60000);
+  const object=URL.createObjectURL(await res.blob()),link=document.createElement('a');link.href=object;link.download=(template?'Template Update - ':'Penjualan - ')+table+'.xlsx';document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(object),60000);
 }
 $('login').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;try{await api('/login','POST',Object.fromEntries(new FormData(form)));form.reset();await showSession();}catch(error){message($('status'),error.message,true);}finally{button.disabled=false;}});
 $('logout').addEventListener('click',async()=>{try{await api('/logout','POST');offset=0;await showSession();}catch(error){message($('status'),error.message,true);}});
-$('type').addEventListener('change',()=>{offset=0;drawSummary();refresh().catch(e=>message($('status'),e.message,true));});
+$('type').addEventListener('change',()=>{resetExcel();offset=0;drawSummary();refresh().catch(e=>message($('status'),e.message,true));});
 $('summary-month').addEventListener('change',drawSummary);$('summary-part').addEventListener('change',drawSummary);
 $('prev').addEventListener('click',()=>{offset=Math.max(0,offset-50);refresh().catch(e=>message($('status'),e.message,true));});
 $('next').addEventListener('click',()=>{offset+=50;refresh().catch(e=>message($('status'),e.message,true));});
 $('add').addEventListener('click',()=>openEditor());$('cancel').addEventListener('click',()=>$('editor').close());
 $('editor').addEventListener('cancel',event=>{if(busy)event.preventDefault();});$('entry').addEventListener('submit',save);
-$('excel').addEventListener('click',()=>excel().catch(e=>message($('status'),e.message,true)));
+$('excel').addEventListener('click',()=>excel(false).catch(e=>message($('status'),e.message,true)));
+$('template').addEventListener('click',()=>excel(true).catch(e=>message($('status'),e.message,true)));
 showSession().catch(error=>message($('status'),error.message,true));
+
+let excelChecked = null;
+function resetExcel(){ excelChecked=null; $('excel-apply').disabled=true; $('excel-result').replaceChildren(); message($('excel-status'),''); }
+$('excel-file').addEventListener('change',resetExcel);
+async function uploadExcel(preview){
+  const file=$('excel-file').files[0], table=$('type').value;
+  if(!file)throw new Error('Pilih file template Excel terlebih dahulu.');
+  if(!/\.xlsx$/i.test(file.name))throw new Error('Pilih file Excel dengan format .xlsx.');
+  if(!preview && (!excelChecked || excelChecked.file!==file || excelChecked.table!==table))throw new Error('Periksa ulang file dan jenis data sebelum menerapkan.');
+  $('excel-preview').disabled=true;$('excel-apply').disabled=true;
+  try{
+    const response=await fetch(url('/excel/upload?tables='+encodeURIComponent(table)+(preview?'&preview=1':'')),{method:'POST',credentials:'omit',headers:{Authorization:'Bearer '+token,'Content-Type':'application/octet-stream'},body:file});
+    const result=await response.json().catch(()=>null);if(!response.ok||!result)throw new Error(result?.error||'File belum dapat diproses. Periksa koneksi atau ukuran file.');
+    const output=$('excel-result');output.replaceChildren();let changes=0,errors=0;
+    for(const sheet of result.sheets||[]){
+      changes+=sheet.tambah+sheet.ubah;errors+=sheet.jumlahError;
+      const title=document.createElement('p');title.textContent=`${sheet.sheet}: ${sheet.status}. Baru: ${sheet.tambah}, revisi: ${sheet.ubah}, kesalahan: ${sheet.jumlahError}.`;output.append(title);
+      const list=document.createElement('ul');
+      for(const error of sheet.errors||[]){const li=document.createElement('li');li.textContent=`Baris ${error.row}: ${error.msg}`;list.append(li);}
+      for(const warning of sheet.peringatan||[]){const li=document.createElement('li');li.textContent=warning;list.append(li);}
+      for(const change of sheet.changes||[]){const li=document.createElement('li');li.textContent=`Baris ${change.row}, ${change.field}: ${change.before??'kosong'} → ${change.after??'kosong'}`;list.append(li);}
+      if(list.childNodes.length)output.append(list);
+      if((sheet.changes||[]).length>=100){const p=document.createElement('p');p.textContent='Hanya 100 perubahan pertama ditampilkan; periksa file secara menyeluruh.';output.append(p);}
+    }
+    if(preview){excelChecked=errors||!changes?null:{file,table};$('excel-apply').disabled=!excelChecked;message($('excel-status'),errors?'Ada kesalahan. Perbaiki file dan periksa kembali.':changes?'Pratinjau selesai. Pastikan perubahan benar sebelum diterapkan.':'Tidak ada perubahan untuk diterapkan.',!!errors);}
+    else{excelChecked=null;message($('excel-status'),errors?'Perubahan tidak diterapkan karena data berubah atau file mengandung kesalahan. Unduh template terbaru.':changes?'Perubahan berhasil disimpan. Unduh template baru untuk revisi berikutnya.':'Tidak ada perubahan yang disimpan.',!!errors);if(!errors){offset=0;await refresh();await loadSummary();}}
+  }finally{$('excel-preview').disabled=false;}
+}
+$('excel-preview').addEventListener('click',()=>{resetExcel();uploadExcel(true).catch(e=>message($('excel-status'),e.message,true));});
+$('excel-apply').addEventListener('click',()=>uploadExcel(false).catch(e=>message($('excel-status'),e.message,true)));
